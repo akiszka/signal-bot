@@ -9,4 +9,6 @@ pkgs.mkShell {
     # keep this line if you use bash
     pkgs.bashInteractive
   ];
+
+  XDG_DATA_HOME = builtins.toString ./data;
 }
