@@ -7,9 +7,9 @@ use rocket::{http::Status, form::{Form, self}};
 struct Message<'a> {
     to_group: bool,
 
-    #[field(validate = validate_sender_recipient())]
+    #[field(validate = validate_recipient())]
     recipient: &'a str,
-    #[field(validate = validate_sender_recipient())]
+    #[field(validate = validate_sender())]
     sender: &'a str,
 
     text: &'a str,
@@ -19,11 +19,17 @@ struct Message<'a> {
     _key: &'a str
 }
 
-fn validate_sender_recipient<'v>(value: &str) -> form::Result<'v, ()> {
-    if value.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
-        Ok(())
-    } else {
-        Err(form::Error::validation("Bad characters in recipient"))?
+fn validate_recipient<'v>(value: &str) -> form::Result<'v, ()> {
+    match value.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
+        true => Ok(()),
+        false => Err(form::Error::validation("Invalid characters in sender or recipient"))?
+    }
+}
+
+fn validate_sender<'v>(value: &str) -> form::Result<'v, ()> {
+    match value.chars().all(|c| c.is_numeric() || c == '+') {
+        true => Ok(()),
+        false => Err(form::Error::validation("Bad characters in sender"))?
     }
 }
 
