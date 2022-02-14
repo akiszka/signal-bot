@@ -30,7 +30,7 @@ jobs:
       name: Load and publish image
       run: |
         docker load -i result
-        docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
+        docker login -u akiszka -p "${{ secrets.DOCKERHUB_PASSWORD }}"
         docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG }}
         docker push ${{ env.tag }}
 
