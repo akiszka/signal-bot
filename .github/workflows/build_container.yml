@@ -6,7 +6,7 @@ on:
       - 'main'
 
 env:
-  TAG: akiszka/signal-bot:${{ github.sha }}
+  TAG: ghcr.io/akiszka/signal-bot:${{ github.sha }}
 
 jobs:
   build:
@@ -32,5 +32,5 @@ jobs:
         docker load -i result
         echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u akiszka --password-stdin
         docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG }}
-        docker push ghcr.io/${{ env.TAG }}
+        docker push ${{ env.TAG }}
 
