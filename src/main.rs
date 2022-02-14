@@ -1,12 +1,17 @@
 #![feature(bool_to_option)]
-mod signal_socket;
 mod signal_link;
+mod signal_socket;
+
+use qrcode::render::svg;
+use qrcode::QrCode;
 use rocket::{
     form::{self, Form},
-    http::Status,
+    http::{ContentType, Status},
+    response::content,
     serde::json::Json,
 };
 use signal_socket::SignalRPCCommand;
+
 #[macro_use]
 extern crate rocket;
 
@@ -69,7 +74,7 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
     })
 }
 
-#[post("/link")]
+#[get("/link")]
 async fn link() -> Result<String, Status> {
     signal_link::link().await.map_err(|err| {
         println!("{:?}", err);
@@ -77,10 +82,33 @@ async fn link() -> Result<String, Status> {
     })
 }
 
+#[get("/link/qr")]
+async fn link_qr() -> Result<content::Custom<Vec<u8>>, Status> {
+    // reuse the link() function to get the joining link
+    let uri = link().await?;
+    let uri = uri.trim();
+
+    let code = QrCode::new(uri.as_bytes()).map_err(|err| {
+        println!("{:?}", err);
+        Status::InternalServerError
+    })?;
+    let image = code
+        .render()
+        .min_dimensions(200, 200)
+        .dark_color(svg::Color("#000000"))
+        .light_color(svg::Color("#ffffff"))
+        .build();
+
+    Ok(content::Custom(ContentType::SVG, image.as_bytes().to_vec()))
+}
+
 #[rocket::main]
 async fn main() {
     rocket::build()
-        .mount("/", routes![index, forward_raw_command, notify, link])
+        .mount(
+            "/",
+            routes![index, forward_raw_command, notify, link, link_qr],
+        )
         .launch()
         .await
         .unwrap()
