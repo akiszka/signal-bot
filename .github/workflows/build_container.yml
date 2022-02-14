@@ -32,5 +32,5 @@ jobs:
         docker load -i result
         docker login -u akiszka -p "${{ secrets.DOCKERHUB_PASSWORD }}"
         docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG }}
-        docker push ${{ env.tag }}
+        docker push ${{ env.TAG }}
 
