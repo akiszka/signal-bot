@@ -17,8 +17,7 @@ pub struct SignalRPCCommand {
 #[derive(Deserialize, Serialize, Debug, Default)]
 #[allow(non_snake_case)]
 pub struct SignalRPCParams {
-    pub account: String,
-
+    pub account: Option<String>,
     pub recipient: Option<Vec<String>>,
     pub groupId: Option<String>,
     pub message: Option<String>,
@@ -38,7 +37,7 @@ impl SignalRPCCommand {
         SignalRPCCommand::new(
             "send".to_string(),
             SignalRPCParams {
-                account: account.to_string(),
+                account: Some(account.to_string()),
                 recipient: Some(vec![phone.to_string()]),
                 message: Some(message.to_string()),
                 ..Default::default()
@@ -50,7 +49,7 @@ impl SignalRPCCommand {
         SignalRPCCommand::new(
             "send".to_string(),
             SignalRPCParams {
-                account: account.to_string(),
+                account: Some(account.to_string()),
                 message: Some(message.to_string()),
                 groupId: Some(group_id.to_string()),
                 ..Default::default()

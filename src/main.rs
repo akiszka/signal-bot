@@ -1,5 +1,6 @@
 #![feature(bool_to_option)]
 mod signal_socket;
+mod signal_link;
 use rocket::{
     form::{self, Form},
     http::Status,
@@ -68,10 +69,18 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
     })
 }
 
+#[post("/link")]
+async fn link() -> Result<String, Status> {
+    signal_link::link().await.map_err(|err| {
+        println!("{:?}", err);
+        Status::InternalServerError
+    })
+}
+
 #[rocket::main]
 async fn main() {
     rocket::build()
-        .mount("/", routes![index, forward_raw_command, notify])
+        .mount("/", routes![index, forward_raw_command, notify, link])
         .launch()
         .await
         .unwrap()
