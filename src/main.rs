@@ -1,7 +1,13 @@
 #![feature(bool_to_option)]
-use std::{process::{Command, ExitStatus}, os::unix::prelude::ExitStatusExt};
-use rocket::{http::Status, form::{Form, self}};
-#[macro_use] extern crate rocket;
+mod signal_socket;
+use rocket::{
+    form::{self, Form},
+    http::Status,
+    serde::json::Json,
+};
+use signal_socket::SignalRPCCommand;
+#[macro_use]
+extern crate rocket;
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -13,23 +19,24 @@ struct Message<'a> {
     sender: &'a str,
 
     text: &'a str,
-
-    #[field(validate = eq("TFu27M4a7lKXq33FHBihepP3XgSZTi7maTBARVxr"))]
-    #[field(name = "key")]
-    _key: &'a str
 }
 
 fn validate_recipient<'v>(value: &str) -> form::Result<'v, ()> {
-    match value.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=') {
+    match value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
+    {
         true => Ok(()),
-        false => Err(form::Error::validation("Invalid characters in sender or recipient"))?
+        false => Err(form::Error::validation(
+            "Invalid characters in sender or recipient",
+        ))?,
     }
 }
 
 fn validate_sender<'v>(value: &str) -> form::Result<'v, ()> {
     match value.chars().all(|c| c.is_numeric() || c == '+') {
         true => Ok(()),
-        false => Err(form::Error::validation("Bad characters in sender"))?
+        false => Err(form::Error::validation("Bad characters in sender"))?,
     }
 }
 
@@ -38,37 +45,34 @@ fn index() -> &'static str {
     "Welcome to the Parlour Signal Bot!\nhttps://parlour.dev"
 }
 
-#[post("/notify", data = "<message>")]
-fn send(message: Form<Message<'_>>) -> Result<&'_ str, Status> {
-    let args = if message.to_group {
-        vec!["-u", message.sender, "send", "-m", message.text, "-g", message.recipient]
-    } else {
-        vec!["-u", message.sender, "send", "-m", message.text, message.recipient]
-    };
-
-    let success = Command::new("/bin/signal-cli")
-        .args(&args)
-        .spawn()
-        .map(|mut status| {
-            status.wait().unwrap_or_else(|err| {
-                eprintln!("Failed to wait for signal-cli: {}", err);
-                ExitStatus::from_raw(1)
-            }).success()
-        })
-        .unwrap_or_else(|err| {
-            eprintln!("Failed to spawn signal-cli: {}", err);
-            false
-        });
-
-    match success {
-        true => Ok("Message sent"),
-        false => Err(Status::InternalServerError)
-    }
+#[post("/rpc_raw", data = "<command>")]
+fn forward_raw_command(command: Json<SignalRPCCommand>) -> Result<String, Status> {
+    signal_socket::send_command(command.into_inner()).map_err(|err| {
+        println!("{:?}", err);
+        Status::InternalServerError
+    })
 }
 
+#[post("/notify", data = "<message>")]
+fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
+    let message = message.into_inner();
+    let command = if message.to_group {
+        SignalRPCCommand::send_group(message.sender, message.recipient, message.text)
+    } else {
+        SignalRPCCommand::send_user(message.sender, message.recipient, message.text)
+    };
 
-#[launch]
-fn rocket() -> _ {
-    rocket::build() 
-    .mount("/", routes![index, send])
+    signal_socket::send_command(command).map_err(|err| {
+        println!("{:?}", err);
+        Status::InternalServerError
+    })
+}
+
+#[rocket::main]
+async fn main() {
+    rocket::build()
+        .mount("/", routes![index, forward_raw_command, notify])
+        .launch()
+        .await
+        .unwrap()
 }
