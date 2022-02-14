@@ -11,7 +11,7 @@ let
 in pkgs.dockerTools.buildLayeredImage {
   inherit name tag;
   created = "now";
-  contents = [ signalbot pkgs.signal-cli ./additional ./data ];
+  contents = [ signalbot pkgs.signal-cli ./additional ];
 
   config = {
     Cmd = [ "/bin/bot" ];
