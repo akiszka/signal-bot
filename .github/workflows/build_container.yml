@@ -6,7 +6,9 @@ on:
       - 'main'
 
 env:
-  TAG: ghcr.io/akiszka/signal-bot:${{ github.sha }}
+  TAG: ghcr.io/akiszka/signal-bot
+  TAG_SHA: ghcr.io/akiszka/signal-bot:${{ github.sha }}
+  TAG_LATEST: ghcr.io/akiszka/signal-bot:latest
 
 jobs:
   build:
@@ -31,6 +33,7 @@ jobs:
       run: |
         docker load -i result
         echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u akiszka --password-stdin
-        docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG }}
-        docker push ${{ env.TAG }}
+        docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG_SHA }}
+        docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG_LATEST }}
+        docker push -a ${{ env.TAG }}
 
