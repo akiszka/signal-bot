@@ -31,7 +31,7 @@ If you want to build signal-bot for development, using cargo will suffice. For e
 cargo run
 ```
 
-> **NOTE: you will need to have [signal-cli](https://github.com/AsamK/signal-cli) installed to run the project with cargo. However, building the container image with nix-build will download signal-cli for you.**
+> **NOTE: you will need to have [signal-cli](https://github.com/AsamK/signal-cli) installed to run the project with cargo. However, building the container image with nix-build will install signal-cli for you.**
 
 If you want to build the container image yourself, you will need to have Nix installed. Then, running the following command will read the instructions at default.nix, download all the dependencies, build the container image and place it under `./result`.
 
