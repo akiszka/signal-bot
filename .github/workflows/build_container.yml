@@ -6,7 +6,7 @@ on:
       - 'main'
 
 env:
-  TAG: akiszka/signalbot:${{ github.sha }}
+  TAG: akiszka/signal-bot:${{ github.sha }}
 
 jobs:
   build:
@@ -30,7 +30,7 @@ jobs:
       name: Load and publish image
       run: |
         docker load -i result
-        docker login -u akiszka -p "${{ secrets.DOCKERHUB_PASSWORD }}"
+        echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u akiszka --password-stdin
         docker tag $(docker images --format "{{.ID}}" | head -n1) ${{ env.TAG }}
-        docker push ${{ env.TAG }}
+        docker push ghcr.io/${{ env.TAG }}
 
