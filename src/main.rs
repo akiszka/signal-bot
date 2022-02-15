@@ -1,8 +1,14 @@
 #![feature(bool_to_option)]
 #![feature(never_type)]
+#![feature(box_into_inner)]
 mod signal_daemon;
 mod signal_link;
 mod signal_socket;
+
+#[macro_use]
+extern crate rocket;
+
+use std::sync::Arc;
 
 use qrcode::render::svg;
 use qrcode::QrCode;
@@ -11,11 +17,10 @@ use rocket::{
     http::{ContentType, Status},
     response::content,
     serde::json::Json,
+    State,
 };
+use signal_daemon::DaemonManager;
 use signal_socket::SignalRPCCommand;
-
-#[macro_use]
-extern crate rocket;
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -77,17 +82,19 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
 }
 
 #[get("/link")]
-async fn link() -> Result<String, Status> {
-    signal_link::link().await.map_err(|err| {
+async fn link(daemon: &State<Arc<DaemonManager>>) -> Result<String, Status> {
+    let daemon = (*daemon.inner()).clone();
+
+    signal_link::link(daemon).await.map_err(|err| {
         println!("{:?}", err);
         Status::InternalServerError
     })
 }
 
 #[get("/link/qr")]
-async fn link_qr() -> Result<content::Custom<Vec<u8>>, Status> {
+async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<Vec<u8>>, Status> {
     // reuse the link() function to get the joining link
-    let uri = link().await?;
+    let uri = link(daemon).await?;
     let uri = uri.trim();
 
     let code = QrCode::new(uri.as_bytes()).map_err(|err| {
@@ -106,9 +113,10 @@ async fn link_qr() -> Result<content::Custom<Vec<u8>>, Status> {
 
 #[rocket::main]
 async fn main() {
-    let daemon = signal_daemon::start().await.unwrap();
+    let daemon = Arc::new(signal_daemon::DaemonManager::new().await.unwrap());
 
     rocket::build()
+        .manage(daemon.clone())
         .mount(
             "/",
             routes![index, forward_raw_command, notify, link, link_qr],
@@ -120,5 +128,5 @@ async fn main() {
             ()
         });
 
-    signal_daemon::stop(daemon).await.unwrap();
+    daemon.stop().await.unwrap();
 }

@@ -3,45 +3,92 @@ use nix::{
     unistd::Pid,
 };
 use rocket::futures::FutureExt;
-use std::{error::Error, process::Stdio, time::Duration};
+use std::{error::Error, process::Stdio, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
+    sync::Mutex,
 };
 
-pub async fn start() -> Result<Child, std::io::Error> {
-    println!("starting signal-cli");
+#[derive(Clone)]
+pub struct DaemonManager {
+    daemon: Arc<Mutex<Child>>,
+}
 
-    let mut command = Command::new("signal-cli")
-        .args(&[
-            "daemon",
-            "--socket",
-            "./signal.sock",
-            "--no-receive-stdout",
-            "--ignore-attachments",
-        ])
-        .kill_on_drop(true)
-        .stdin(Stdio::null())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::piped())
-        .spawn()?;
+impl DaemonManager {
+    pub async fn new() -> Result<DaemonManager, std::io::Error> {
+        println!("starting signal-cli");
 
-    let stderr = command.stderr.take().unwrap();
-    let reader = BufReader::new(stderr);
+        let command = DaemonManager::start_daemon().await?;
 
-    tokio::select! {
-        _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
-            println!("Timeout: killing Signal.");
-            stop(command).await.unwrap();
-            panic!("Could not start signal-cli in time!");
-        },
-        value = read_until_listening(reader) => {
-            value.unwrap();
-            println!("signal-cli started");
-        }
+        let child = Mutex::new(command);
+        let child = Arc::new(child);
+        Ok(DaemonManager { daemon: child })
     }
 
-    Ok(command)
+    async fn start_daemon() -> Result<Child, std::io::Error> {
+        let mut command = Command::new("signal-cli")
+            .args(&[
+                "daemon",
+                "--socket",
+                "./signal.sock",
+                "--no-receive-stdout",
+                "--ignore-attachments",
+            ])
+            .kill_on_drop(true)
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stderr = command.stderr.take().unwrap();
+        let reader = BufReader::new(stderr);
+
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
+                println!("Timeout: killing Signal.");
+                command.kill().await?;
+                panic!("Could not start signal-cli in time!");
+            },
+            value = read_until_listening(reader) => {
+                value.unwrap();
+                println!("signal-cli started");
+            }
+        }
+
+        Ok(command)
+    }
+
+    pub async fn stop(&self) -> Result<(), Box<dyn Error>> {
+        let mut daemon = self.daemon.lock().await;
+
+        let pid = match daemon.id() {
+            Some(x) => Pid::from_raw(x.try_into()?),
+            None => return Ok(()),
+        };
+
+        kill(pid, Signal::SIGINT)?;
+
+        tokio::select! {
+            _ = daemon.wait() => {
+                println!("signal-cli exitted successfully");
+            },
+            _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
+                println!("signal-cli exit timeout! killing...");
+                daemon.kill().await?;
+            }
+        };
+
+        Ok(())
+    }
+
+    pub async fn restart(&self) -> Result<(), Box<dyn Error>> {
+        self.stop().await?;
+        let mut daemon = self.daemon.lock().await;
+        *daemon = DaemonManager::start_daemon().await?;
+
+        Ok(())
+    }
 }
 
 // This is a helper function that reads from the stdout of signal-cli until it starts listening on the socket.
@@ -60,33 +107,4 @@ async fn read_until_listening(mut stdout: BufReader<ChildStderr>) -> Result<(), 
     }
 
     Ok(())
-}
-
-// This tries to stop Signal gracefully to give it a chance to clean up.
-// If it doesn't stop within a set delay, it kills the daemon.
-pub async fn stop(mut daemon: Child) -> Result<(), Box<dyn Error>> {
-    let pid = match daemon.id() {
-        Some(x) => Pid::from_raw(x.try_into()?),
-        None => return Ok(()),
-    };
-
-    kill(pid, Signal::SIGINT)?;
-
-    tokio::select! {
-        _ = daemon.wait() => {
-            println!("signal-cli exitted successfully");
-        },
-        _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
-            println!("signal-cli exit timeout! killing...");
-            daemon.kill().await?;
-        }
-    };
-
-    Ok(())
-}
-
-// This restarts the Signal daemon, panicking on error.
-pub async fn restart(daemon: Child) -> Child {
-    stop(daemon).await.unwrap();
-    start().await.unwrap()
 }

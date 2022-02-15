@@ -1,4 +1,4 @@
-use std::{error::Error, process::Stdio, time::Duration};
+use std::{error::Error, process::Stdio, sync::Arc, time::Duration};
 
 use rocket::futures::FutureExt;
 use tokio::{
@@ -6,8 +6,10 @@ use tokio::{
     process::Command,
 };
 
+use crate::signal_daemon::DaemonManager;
+
 // FIXME: Linking requires restarting the JSON RPC deamon
-pub async fn link() -> Result<String, Box<dyn Error>> {
+pub async fn link(daemon_manager: Arc<DaemonManager>) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])
         .kill_on_drop(false)
@@ -29,7 +31,9 @@ pub async fn link() -> Result<String, Box<dyn Error>> {
         tokio::select! {
             _ = output.wait() => {
                 // Linking was successful. TODO: restart the Signal daemon.
-                println!("Link successful");
+                println!("[LINK] Link successful. Restarting...");
+                daemon_manager.restart().await;
+                println!("[LINK] Restarted!")
             },
             _ = tokio::time::sleep(Duration::from_secs(60*4)).fuse() => {
                 println!("signal-link timeout");
