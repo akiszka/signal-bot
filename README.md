@@ -2,6 +2,8 @@
 
 This is a dockerized bot for the [Signal Messenger](https://signal.org/en/). It can be used to log in to Signal and send messages over the Internet.
 
+**WARNING: This is by no means production-ready software. Please note that using it carries the possibility of leaking your Signal keys. You should never publically expose this service.**
+
 # Features
 
 * containerized

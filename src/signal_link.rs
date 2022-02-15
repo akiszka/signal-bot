@@ -28,7 +28,8 @@ pub async fn link() -> Result<String, Box<dyn Error>> {
     tokio::spawn(async move {
         tokio::select! {
             _ = output.wait() => {
-                println!("signal-cli finished");
+                // Linking was successful. TODO: restart the Signal daemon.
+                println!("Link successful");
             },
             _ = tokio::time::sleep(Duration::from_secs(60*4)).fuse() => {
                 println!("signal-link timeout");

@@ -9,6 +9,7 @@ edition = "2021"
 serde = "1.0"
 tokio = { version = "1", features = ["full"] }
 qrcode = { version = "0.12", default-features = false, features = ["svg"] }
+nix = "0.23.1"
 
 [dependencies.rocket]
 version = "0.5.0-rc.1"

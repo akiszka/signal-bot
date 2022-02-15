@@ -1,4 +1,6 @@
 #![feature(bool_to_option)]
+#![feature(never_type)]
+mod signal_daemon;
 mod signal_link;
 mod signal_socket;
 
@@ -104,6 +106,8 @@ async fn link_qr() -> Result<content::Custom<Vec<u8>>, Status> {
 
 #[rocket::main]
 async fn main() {
+    let daemon = signal_daemon::start().await.unwrap();
+
     rocket::build()
         .mount(
             "/",
@@ -111,5 +115,10 @@ async fn main() {
         )
         .launch()
         .await
-        .unwrap()
+        .unwrap_or_else(|err| {
+            println!("Error in rocket: {}", err);
+            ()
+        });
+
+    signal_daemon::stop(daemon).await.unwrap();
 }
