@@ -19,9 +19,8 @@ docker pull ghcr.io/akiszka/signal-bot:latest
 Then, start the container:
 
 ```sh
-docker run --rm -itp 52340:8000 --tmpfs /tmp:exec ghcr.io/akiszka/signal-bot
+docker run --rm -it -p 52340:8000 -v ./some_directory:/data --tmpfs /tmp:exec ghcr.io/akiszka/signal-bot
 ```
-[[[note: add /data mount, explain why /tmp is exec, TODO: start signal-cli deamon inside rust]]]
 
 # Building
 
@@ -47,6 +46,7 @@ docker load -i result
 
 # Roadmap
 
+- [ ] manage the Signal daemon from inside Rust
 - [ ] add tests
 - [ ] add access control (possibly with JWT)
 - [ ] add webhook support for GitHub, Expo, etc.
