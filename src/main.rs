@@ -4,6 +4,7 @@
 mod signal_daemon;
 mod signal_link;
 mod signal_socket;
+mod webhooks;
 
 #[macro_use]
 extern crate rocket;
@@ -21,6 +22,7 @@ use rocket::{
 };
 use signal_daemon::DaemonManager;
 use signal_socket::SignalRPCCommand;
+use webhooks::WebhookPayload;
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -111,6 +113,12 @@ async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<V
     Ok(content::Custom(ContentType::SVG, image.as_bytes().to_vec()))
 }
 
+#[post("/webhook/github", data = "<payload>")]
+fn webhook_gh(payload: Json<webhooks::github::Payload>) -> Status {
+    // TODO: get sender and recipient from request
+    payload.notify_user("", "").map_or(Status::InternalServerError, |_| Status::Ok)
+}
+
 #[rocket::main]
 async fn main() {
     let daemon = Arc::new(signal_daemon::DaemonManager::new().await.unwrap());
@@ -119,7 +127,7 @@ async fn main() {
         .manage(daemon.clone())
         .mount(
             "/",
-            routes![index, forward_raw_command, notify, link, link_qr],
+            routes![index, forward_raw_command, notify, link, link_qr, webhook_gh],
         )
         .launch()
         .await
