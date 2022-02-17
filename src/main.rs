@@ -9,8 +9,6 @@ mod webhooks;
 #[macro_use]
 extern crate rocket;
 
-use std::sync::Arc;
-
 use qrcode::render::svg;
 use qrcode::QrCode;
 use rocket::{
@@ -84,7 +82,7 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
 }
 
 #[get("/link")]
-async fn link(daemon: &State<Arc<DaemonManager>>) -> Result<String, Status> {
+async fn link(daemon: &State<DaemonManager>) -> Result<String, Status> {
     let daemon = (*daemon.inner()).clone();
 
     signal_link::link(daemon).await.map_err(|err| {
@@ -94,7 +92,7 @@ async fn link(daemon: &State<Arc<DaemonManager>>) -> Result<String, Status> {
 }
 
 #[get("/link/qr")]
-async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<Vec<u8>>, Status> {
+async fn link_qr(daemon: &State<DaemonManager>) -> Result<content::Custom<Vec<u8>>, Status> {
     // reuse the link() function to get the joining link
     let uri = link(daemon).await?;
     let uri = uri.trim();
@@ -113,21 +111,29 @@ async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<V
     Ok(content::Custom(ContentType::SVG, image.as_bytes().to_vec()))
 }
 
-#[post("/webhook/github", data = "<payload>")]
-fn webhook_gh(payload: Json<webhooks::github::Payload>) -> Status {
-    // TODO: get sender and recipient from request
-    payload.notify_user("", "").map_or(Status::InternalServerError, |_| Status::Ok)
+#[post("/webhook/github?<sender>&<recipient>", data = "<payload>")]
+fn webhook_gh(payload: Json<webhooks::github::Payload>, sender: &str, recipient: &str) -> Status {
+    payload
+        .notify_user(sender, recipient)
+        .map_or(Status::InternalServerError, |_| Status::Ok)
 }
 
 #[rocket::main]
 async fn main() {
-    let daemon = Arc::new(signal_daemon::DaemonManager::new().await.unwrap());
+    let daemon = signal_daemon::DaemonManager::new().await.unwrap();
 
     rocket::build()
         .manage(daemon.clone())
         .mount(
             "/",
-            routes![index, forward_raw_command, notify, link, link_qr, webhook_gh],
+            routes![
+                index,
+                forward_raw_command,
+                notify,
+                link,
+                link_qr,
+                webhook_gh
+            ],
         )
         .launch()
         .await
