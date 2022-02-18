@@ -71,8 +71,8 @@ pub fn send_command_raw(command: &str) -> std::io::Result<String> {
     stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(std::time::Duration::from_secs(5)))?;
 
-    stream.write(command.as_bytes())?;
-    stream.write(b"\n")?;
+    stream.write_all(command.as_bytes())?;
+    stream.write_all(b"\n")?;
     stream.flush()?;
     let mut response = String::new();
     reader.read_line(&mut response)?;

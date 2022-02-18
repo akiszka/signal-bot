@@ -1,4 +1,4 @@
-use std::{error::Error, process::Stdio, sync::Arc, time::Duration};
+use std::{error::Error, process::Stdio, time::Duration};
 
 use rocket::futures::FutureExt;
 use tokio::{
@@ -9,7 +9,7 @@ use tokio::{
 use crate::signal_daemon::DaemonManager;
 
 // FIXME: Linking requires restarting the JSON RPC deamon
-pub async fn link(daemon_manager: Arc<DaemonManager>) -> Result<String, Box<dyn Error>> {
+pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])
         .kill_on_drop(false)

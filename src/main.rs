@@ -4,11 +4,10 @@
 mod signal_daemon;
 mod signal_link;
 mod signal_socket;
+mod webhooks;
 
 #[macro_use]
 extern crate rocket;
-
-use std::sync::Arc;
 
 use qrcode::render::svg;
 use qrcode::QrCode;
@@ -21,6 +20,7 @@ use rocket::{
 };
 use signal_daemon::DaemonManager;
 use signal_socket::SignalRPCCommand;
+use webhooks::WebhookPayload;
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -40,16 +40,18 @@ fn validate_recipient<'v>(value: &str) -> form::Result<'v, ()> {
         .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
     {
         true => Ok(()),
-        false => Err(form::Error::validation(
+        false => Err(form::Errors::from(form::Error::validation(
             "Invalid characters in sender or recipient",
-        ))?,
+        ))),
     }
 }
 
 fn validate_sender<'v>(value: &str) -> form::Result<'v, ()> {
     match value.chars().all(|c| c.is_numeric() || c == '+') {
         true => Ok(()),
-        false => Err(form::Error::validation("Bad characters in sender"))?,
+        false => Err(form::Errors::from(form::Error::validation(
+            "Bad characters in sender",
+        ))),
     }
 }
 
@@ -82,7 +84,7 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
 }
 
 #[get("/link")]
-async fn link(daemon: &State<Arc<DaemonManager>>) -> Result<String, Status> {
+async fn link(daemon: &State<DaemonManager>) -> Result<String, Status> {
     let daemon = (*daemon.inner()).clone();
 
     signal_link::link(daemon).await.map_err(|err| {
@@ -92,7 +94,7 @@ async fn link(daemon: &State<Arc<DaemonManager>>) -> Result<String, Status> {
 }
 
 #[get("/link/qr")]
-async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<Vec<u8>>, Status> {
+async fn link_qr(daemon: &State<DaemonManager>) -> Result<content::Custom<Vec<u8>>, Status> {
     // reuse the link() function to get the joining link
     let uri = link(daemon).await?;
     let uri = uri.trim();
@@ -111,21 +113,34 @@ async fn link_qr(daemon: &State<Arc<DaemonManager>>) -> Result<content::Custom<V
     Ok(content::Custom(ContentType::SVG, image.as_bytes().to_vec()))
 }
 
+#[post("/webhook/github?<sender>&<recipient>", data = "<payload>")]
+fn webhook_gh(payload: Json<webhooks::github::Payload>, sender: &str, recipient: &str) -> Status {
+    payload
+        .notify_user(sender, recipient)
+        .map_or(Status::InternalServerError, |_| Status::Ok)
+}
+
 #[rocket::main]
 async fn main() {
-    let daemon = Arc::new(signal_daemon::DaemonManager::new().await.unwrap());
+    let daemon = signal_daemon::DaemonManager::new().await.unwrap();
 
     rocket::build()
         .manage(daemon.clone())
         .mount(
             "/",
-            routes![index, forward_raw_command, notify, link, link_qr],
+            routes![
+                index,
+                forward_raw_command,
+                notify,
+                link,
+                link_qr,
+                webhook_gh
+            ],
         )
         .launch()
         .await
         .unwrap_or_else(|err| {
             println!("Error in rocket: {}", err);
-            ()
         });
 
     daemon.stop().await.unwrap();

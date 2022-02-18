@@ -48,7 +48,7 @@ docker load -i result
 
 # Roadmap
 
-- [ ] manage the Signal daemon from inside Rust
+- [x] manage the Signal daemon from inside Rust
 - [ ] add tests
 - [ ] add access control (possibly with JWT)
-- [ ] add webhook support for GitHub, Expo, etc.
+- [x] add webhook support for GitHub
