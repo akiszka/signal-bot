@@ -40,16 +40,18 @@ fn validate_recipient<'v>(value: &str) -> form::Result<'v, ()> {
         .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')
     {
         true => Ok(()),
-        false => Err(form::Error::validation(
+        false => Err(form::Errors::from(form::Error::validation(
             "Invalid characters in sender or recipient",
-        ))?,
+        ))),
     }
 }
 
 fn validate_sender<'v>(value: &str) -> form::Result<'v, ()> {
     match value.chars().all(|c| c.is_numeric() || c == '+') {
         true => Ok(()),
-        false => Err(form::Error::validation("Bad characters in sender"))?,
+        false => Err(form::Errors::from(form::Error::validation(
+            "Bad characters in sender",
+        ))),
     }
 }
 
@@ -139,7 +141,6 @@ async fn main() {
         .await
         .unwrap_or_else(|err| {
             println!("Error in rocket: {}", err);
-            ()
         });
 
     daemon.stop().await.unwrap();

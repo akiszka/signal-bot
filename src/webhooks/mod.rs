@@ -1,5 +1,5 @@
-use std::error::Error;
 use crate::signal_socket::{self, SignalRPCCommand};
+use std::error::Error;
 
 pub mod github;
 
@@ -10,6 +10,7 @@ pub trait WebhookPayload {
             sender,
             recipient,
             self.to_string().as_str(),
-        )).map(|_| ())
+        ))
+        .map(|_| ())
     }
 }
