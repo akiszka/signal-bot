@@ -20,6 +20,7 @@ use rocket::{
 };
 use signal_daemon::DaemonManager;
 use signal_socket::SignalRPCCommand;
+use simple_logger::SimpleLogger;
 use webhooks::WebhookPayload;
 
 #[derive(FromForm)]
@@ -63,7 +64,7 @@ fn index() -> &'static str {
 #[post("/rpc_raw", data = "<command>")]
 fn forward_raw_command(command: Json<SignalRPCCommand>) -> Result<String, Status> {
     signal_socket::send_command(command.into_inner()).map_err(|err| {
-        println!("{:?}", err);
+        error!("{:?}", err);
         Status::InternalServerError
     })
 }
@@ -78,7 +79,7 @@ fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
     };
 
     signal_socket::send_command(command).map_err(|err| {
-        println!("{:?}", err);
+        error!("{:?}", err);
         Status::InternalServerError
     })
 }
@@ -88,7 +89,7 @@ async fn link(daemon: &State<DaemonManager>) -> Result<String, Status> {
     let daemon = (*daemon.inner()).clone();
 
     signal_link::link(daemon).await.map_err(|err| {
-        println!("{:?}", err);
+        error!("{:?}", err);
         Status::InternalServerError
     })
 }
@@ -100,7 +101,7 @@ async fn link_qr(daemon: &State<DaemonManager>) -> Result<content::Custom<Vec<u8
     let uri = uri.trim();
 
     let code = QrCode::new(uri.as_bytes()).map_err(|err| {
-        println!("{:?}", err);
+        error!("{:?}", err);
         Status::InternalServerError
     })?;
     let image = code
@@ -122,6 +123,8 @@ fn webhook_gh(payload: Json<webhooks::github::Payload>, sender: &str, recipient:
 
 #[rocket::main]
 async fn main() {
+    SimpleLogger::new().init().unwrap();
+
     let daemon = signal_daemon::DaemonManager::new().await.unwrap();
 
     rocket::build()
@@ -140,7 +143,7 @@ async fn main() {
         .launch()
         .await
         .unwrap_or_else(|err| {
-            println!("Error in rocket: {}", err);
+            error!("Error in rocket: {}", err);
         });
 
     daemon.stop().await.unwrap();

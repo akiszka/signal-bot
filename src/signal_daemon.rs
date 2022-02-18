@@ -17,7 +17,7 @@ pub struct DaemonManager {
 
 impl DaemonManager {
     pub async fn new() -> Result<DaemonManager, std::io::Error> {
-        println!("starting signal-cli");
+        trace!("starting signal-cli");
 
         let command = DaemonManager::start_daemon().await?;
 
@@ -46,13 +46,13 @@ impl DaemonManager {
 
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
-                println!("Timeout: killing Signal.");
+                debug!("Timeout: killing Signal.");
                 command.kill().await?;
                 panic!("Could not start signal-cli in time!");
             },
             value = read_until_listening(reader) => {
                 value.unwrap();
-                println!("signal-cli started");
+                trace!("signal-cli started");
             }
         }
 
@@ -71,10 +71,10 @@ impl DaemonManager {
 
         tokio::select! {
             _ = daemon.wait() => {
-                println!("signal-cli exitted successfully");
+                trace!("signal-cli exitted successfully");
             },
             _ = tokio::time::sleep(Duration::from_secs(10)).fuse() => {
-                println!("signal-cli exit timeout! killing...");
+                warn!("signal-cli exit timeout! killing...");
                 daemon.kill().await?;
             }
         };
@@ -98,10 +98,10 @@ async fn read_until_listening(mut stdout: BufReader<ChildStderr>) -> Result<(), 
 
     loop {
         stdout.read_line(&mut response).await?;
-        println!("Signal: {}", response);
+        trace!("Signal: {}", &response);
 
         if response.contains("Listening on socket") {
-            println!("signal-cli is listening");
+            debug!("signal-cli is listening");
             break;
         }
     }
