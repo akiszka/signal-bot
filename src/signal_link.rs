@@ -23,7 +23,7 @@ pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error
     let mut response = String::new();
     reader.read_line(&mut response).await?;
 
-    println!("got join link from signal-cli: {}", response);
+    debug!("got join link from signal-cli: {}", &response);
 
     // This will either let Signal finish or kill it after 4 minutes
     #[allow(unused_must_use)]
@@ -31,12 +31,12 @@ pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error
         tokio::select! {
             _ = output.wait() => {
                 // Linking was successful. TODO: restart the Signal daemon.
-                println!("[LINK] Link successful. Restarting...");
+                debug!("[LINK] Link successful. Restarting...");
                 daemon_manager.restart().await;
-                println!("[LINK] Restarted!")
+                debug!("[LINK] Restarted!");
             },
             _ = tokio::time::sleep(Duration::from_secs(60*4)).fuse() => {
-                println!("signal-link timeout");
+                error!("signal-link timeout");
                 output.kill().await;
             }
         }
