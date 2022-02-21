@@ -19,9 +19,8 @@ use rocket::{
     State,
 };
 use signal_daemon::DaemonManager;
-use signal_socket::SignalRPCCommand;
+use signal_socket::RPCCommand;
 use simple_logger::SimpleLogger;
-use webhooks::WebhookPayload;
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -62,23 +61,25 @@ fn index() -> &'static str {
 }
 
 #[post("/rpc_raw", data = "<command>")]
-fn forward_raw_command(command: Json<SignalRPCCommand>) -> Result<String, Status> {
-    signal_socket::send_command(command.into_inner()).map_err(|err| {
-        error!("{:?}", err);
-        Status::InternalServerError
-    })
+async fn forward_raw_command(command: Json<RPCCommand>) -> Result<String, Status> {
+    signal_socket::relay_command(command.into_inner())
+        .await
+        .map_err(|err| {
+            error!("{:?}", err);
+            Status::InternalServerError
+        })
 }
 
 #[post("/notify", data = "<message>")]
-fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
+async fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
     let message = message.into_inner();
     let command = if message.to_group {
-        SignalRPCCommand::send_group(message.sender, message.recipient, message.text)
+        RPCCommand::send_group(message.sender, message.recipient, message.text)
     } else {
-        SignalRPCCommand::send_user(message.sender, message.recipient, message.text)
+        RPCCommand::send_user(message.sender, message.recipient, message.text)
     };
 
-    signal_socket::send_command(command).map_err(|err| {
+    signal_socket::relay_command(command).await.map_err(|err| {
         error!("{:?}", err);
         Status::InternalServerError
     })
@@ -115,9 +116,13 @@ async fn link_qr(daemon: &State<DaemonManager>) -> Result<content::Custom<Vec<u8
 }
 
 #[post("/webhook/github?<sender>&<recipient>", data = "<payload>")]
-fn webhook_gh(payload: Json<webhooks::github::Payload>, sender: &str, recipient: &str) -> Status {
-    payload
-        .notify_user(sender, recipient)
+async fn webhook_gh(
+    payload: Json<webhooks::github::Payload<'_>>,
+    sender: &str,
+    recipient: &str,
+) -> Status {
+    webhooks::notify_user(payload.into_inner(), sender, recipient)
+        .await
         .map_or(Status::InternalServerError, |_| Status::Ok)
 }
 

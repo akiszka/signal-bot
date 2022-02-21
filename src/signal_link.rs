@@ -8,7 +8,6 @@ use tokio::{
 
 use crate::signal_daemon::DaemonManager;
 
-// FIXME: Linking requires restarting the JSON RPC deamon
 pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])

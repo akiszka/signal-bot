@@ -23,6 +23,7 @@ impl DaemonManager {
 
         let child = Mutex::new(command);
         let child = Arc::new(child);
+
         Ok(DaemonManager { daemon: child })
     }
 
