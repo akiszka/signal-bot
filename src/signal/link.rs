@@ -6,9 +6,9 @@ use tokio::{
     process::Command,
 };
 
-use crate::signal_daemon::DaemonManager;
+use super::Signal;
 
-pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error>> {
+pub async fn link(signal: Signal) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])
         .kill_on_drop(false)
@@ -31,7 +31,7 @@ pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error
             _ = output.wait() => {
                 // Linking was successful. TODO: restart the Signal daemon.
                 debug!("[LINK] Link successful. Restarting...");
-                daemon_manager.restart().await;
+                signal.restart().await;
                 debug!("[LINK] Restarted!");
             },
             _ = tokio::time::sleep(Duration::from_secs(60*4)).fuse() => {

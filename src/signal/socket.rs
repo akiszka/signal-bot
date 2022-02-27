@@ -82,7 +82,7 @@ impl Connection {
         UnixStream::from_std(stream)
     }
 
-    fn new() -> std::io::Result<Self> {
+    pub fn new() -> std::io::Result<Self> {
         let (read_stream, mut write_stream) = Connection::init_socket()?.into_split();
 
         let (request_tx, mut request_rx) =
@@ -130,15 +130,6 @@ impl Connection {
     }
 
     pub async fn get_reply() -> Result<String, Box<dyn Error>> {
-        Ok("test2".into())
+        todo!();
     }
-}
-
-#[deprecated]
-pub async fn relay_command(command: RPCCommand) -> Result<String, Box<dyn Error>> {
-    let connection = Connection::new().unwrap();
-
-    let request_id = connection.send_command(command).await?;
-
-    Ok(request_id)
 }

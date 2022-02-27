@@ -53,7 +53,7 @@ impl DaemonManager {
             },
             value = read_until_listening(reader) => {
                 value.unwrap();
-                trace!("signal-cli started");
+                trace!("signal-cli started and is ready");
             }
         }
 
@@ -98,8 +98,12 @@ async fn read_until_listening(mut stdout: BufReader<ChildStderr>) -> Result<(), 
     let mut response = String::new();
 
     loop {
+        response.clear();
         stdout.read_line(&mut response).await?;
-        trace!("Signal: {}", &response);
+
+        if !response.is_empty() {
+            trace!("Signal: {}", &response.trim_end());
+        }
 
         if response.contains("Listening on socket") {
             debug!("signal-cli is listening");

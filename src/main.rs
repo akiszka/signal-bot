@@ -1,9 +1,7 @@
 #![feature(bool_to_option)]
 #![feature(never_type)]
 #![feature(box_into_inner)]
-mod signal_daemon;
-mod signal_link;
-mod signal_socket;
+mod signal;
 mod webhooks;
 
 #[macro_use]
@@ -18,9 +16,9 @@ use rocket::{
     serde::json::Json,
     State,
 };
-use signal_daemon::DaemonManager;
-use signal_socket::RPCCommand;
 use simple_logger::SimpleLogger;
+
+use crate::signal::{socket::RPCCommand, Signal};
 
 #[derive(FromForm)]
 struct Message<'a> {
@@ -61,8 +59,12 @@ fn index() -> &'static str {
 }
 
 #[post("/rpc_raw", data = "<command>")]
-async fn forward_raw_command(command: Json<RPCCommand>) -> Result<String, Status> {
-    signal_socket::relay_command(command.into_inner())
+async fn forward_raw_command(
+    command: Json<RPCCommand>,
+    signal: &State<Signal>,
+) -> Result<String, Status> {
+    signal
+        .send_command(command.into_inner())
         .await
         .map_err(|err| {
             error!("{:?}", err);
@@ -71,7 +73,7 @@ async fn forward_raw_command(command: Json<RPCCommand>) -> Result<String, Status
 }
 
 #[post("/notify", data = "<message>")]
-async fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
+async fn notify(message: Form<Message<'_>>, signal: &State<Signal>) -> Result<String, Status> {
     let message = message.into_inner();
     let command = if message.to_group {
         RPCCommand::send_group(message.sender, message.recipient, message.text)
@@ -79,26 +81,26 @@ async fn notify(message: Form<Message<'_>>) -> Result<String, Status> {
         RPCCommand::send_user(message.sender, message.recipient, message.text)
     };
 
-    signal_socket::relay_command(command).await.map_err(|err| {
+    signal.send_command(command).await.map_err(|err| {
         error!("{:?}", err);
         Status::InternalServerError
     })
 }
 
 #[get("/link")]
-async fn link(daemon: &State<DaemonManager>) -> Result<String, Status> {
-    let daemon = (*daemon.inner()).clone();
+async fn link(signal: &State<Signal>) -> Result<String, Status> {
+    let daemon = (*signal.inner()).clone();
 
-    signal_link::link(daemon).await.map_err(|err| {
+    signal::link::link(daemon).await.map_err(|err| {
         error!("{:?}", err);
         Status::InternalServerError
     })
 }
 
 #[get("/link/qr")]
-async fn link_qr(daemon: &State<DaemonManager>) -> Result<content::Custom<Vec<u8>>, Status> {
+async fn link_qr(signal: &State<Signal>) -> Result<content::Custom<Vec<u8>>, Status> {
     // reuse the link() function to get the joining link
-    let uri = link(daemon).await?;
+    let uri = link(signal).await?;
     let uri = uri.trim();
 
     let code = QrCode::new(uri.as_bytes()).map_err(|err| {
@@ -120,8 +122,9 @@ async fn webhook_gh(
     payload: Json<webhooks::github::Payload<'_>>,
     sender: &str,
     recipient: &str,
+    signal: &State<Signal>,
 ) -> Status {
-    webhooks::notify_user(payload.into_inner(), sender, recipient)
+    webhooks::notify_user(signal, payload.into_inner(), sender, recipient)
         .await
         .map_or(Status::InternalServerError, |_| Status::Ok)
 }
@@ -130,10 +133,10 @@ async fn webhook_gh(
 async fn main() {
     SimpleLogger::new().init().unwrap();
 
-    let daemon = signal_daemon::DaemonManager::new().await.unwrap();
+    let signal = signal::Signal::new().await.unwrap();
 
     rocket::build()
-        .manage(daemon.clone())
+        .manage(signal.clone())
         .mount(
             "/",
             routes![
@@ -151,5 +154,5 @@ async fn main() {
             error!("Error in rocket: {}", err);
         });
 
-    daemon.stop().await.unwrap();
+    signal.stop().await.unwrap();
 }
