@@ -1,6 +1,9 @@
 use rocket::serde::json::serde_json;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::error::Error;
+use std::sync::Arc;
+use std::sync::Mutex;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
@@ -24,6 +27,24 @@ pub struct RPCParams {
     pub recipient: Option<Vec<String>>,
     pub groupId: Option<String>,
     pub message: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct RPCResponse {
+    jsonrpc: String,
+    pub id: String,
+    result: RPCResult,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct RPCResult {
+    pub timestamp: u64,
+    pub results: Vec<RPCResultInternal>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct RPCResultInternal {
+    pub r#type: String,
 }
 
 impl RPCCommand {
@@ -66,9 +87,9 @@ impl RPCCommand {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Connection {
-    request_tx: mpsc::Sender<(RPCCommand, oneshot::Sender<String>)>,
+    request_tx: mpsc::Sender<(RPCCommand, oneshot::Sender<RPCResponse>)>,
 }
 
 impl Connection {
@@ -83,11 +104,18 @@ impl Connection {
     }
 
     pub fn new() -> std::io::Result<Self> {
-        let (read_stream, mut write_stream) = Connection::init_socket()?.into_split();
+        // These sockets are used to communicate with Signal
+        let (read_socket, mut write_socket) = Connection::init_socket()?.into_split();
 
+        // You can send and recieve commands through these channels
         let (request_tx, mut request_rx) =
-            mpsc::channel::<(RPCCommand, oneshot::Sender<String>)>(100);
+            mpsc::channel::<(RPCCommand, oneshot::Sender<RPCResponse>)>(100);
 
+        // This maps request ids to channels awaiting responses from Signal
+        let responses = Arc::new(Mutex::new(HashMap::new()));
+
+        // This sends commands to Signal
+        let sender_responses = responses.clone();
         tokio::spawn(async move {
             while let Some((mut cmd, response)) = request_rx.recv().await {
                 // FIXME: handle errors
@@ -96,40 +124,48 @@ impl Connection {
                 let command = serde_json::to_string(cmd.with_id(id.clone())).unwrap();
                 let command = command.as_str();
 
-                write_stream.write_all(command.as_bytes()).await.unwrap();
-                write_stream.write_all(b"\n").await.unwrap();
-                write_stream.flush().await.unwrap();
+                write_socket.write_all(command.as_bytes()).await.unwrap();
+                write_socket.write_all(b"\n").await.unwrap();
+                write_socket.flush().await.unwrap();
 
-                response.send(id).unwrap();
+                let mut responses = sender_responses.lock().unwrap();
+                responses.insert(id, response);
             }
         });
 
+        // This reads responses from Signal
+        let reader_responses = responses.clone();
         tokio::spawn(async move {
-            let mut reader = BufReader::new(read_stream);
+            let mut reader = BufReader::new(read_socket);
 
-            let mut response = String::new();
-            while reader.read_line(&mut response).await.is_ok() {
-                if response.trim() == "" {
+            let mut response_raw = String::new();
+            while reader.read_line(&mut response_raw).await.is_ok() {
+                if response_raw.trim() == "" {
                     continue;
                 }
-                println!("Signal: {}", response);
-                response.clear();
+
+                let mut responses = reader_responses.lock().unwrap();
+                let response: Option<RPCResponse> = serde_json::from_str(&response_raw).ok();
+
+                if let Some(response) = response {
+                    if let Some(response_channel) = responses.remove(&response.id) {
+                        response_channel.send(response).unwrap();
+                    }
+                }
+
+                response_raw.clear();
             }
         });
 
         Ok(Connection { request_tx })
     }
 
-    pub async fn send_command(&self, command: RPCCommand) -> Result<String, Box<dyn Error>> {
+    pub async fn send_command(&self, command: RPCCommand) -> Result<RPCResponse, Box<dyn Error>> {
         let (response_tx, response_rx) = oneshot::channel();
 
         self.request_tx.send((command, response_tx)).await?;
-        let request_id = response_rx.await?;
+        let response = response_rx.await?;
 
-        Ok(request_id)
-    }
-
-    pub async fn get_reply() -> Result<String, Box<dyn Error>> {
-        todo!();
+        Ok(response)
     }
 }

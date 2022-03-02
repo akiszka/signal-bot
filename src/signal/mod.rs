@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use self::socket::RPCCommand;
+use rocket::serde::json::serde_json;
 
 mod daemon;
 pub mod link;
@@ -32,6 +33,7 @@ impl Signal {
     }
 
     pub async fn send_command(&self, command: RPCCommand) -> Result<String, Box<dyn Error>> {
-        self.connection.send_command(command).await
+        let response = self.connection.send_command(command).await?;
+        Ok(serde_json::to_string(&response)?)
     }
 }
