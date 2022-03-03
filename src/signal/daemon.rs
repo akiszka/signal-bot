@@ -16,7 +16,7 @@ pub struct DaemonManager {
 }
 
 impl DaemonManager {
-    pub async fn new() -> Result<DaemonManager, std::io::Error> {
+    pub async fn new() -> Result<DaemonManager, Box<dyn Error>> {
         trace!("starting signal-cli");
 
         let command = DaemonManager::start_daemon().await?;
@@ -27,7 +27,7 @@ impl DaemonManager {
         Ok(DaemonManager { daemon: child })
     }
 
-    async fn start_daemon() -> Result<Child, std::io::Error> {
+    async fn start_daemon() -> Result<Child, Box<dyn Error>> {
         let mut command = Command::new("signal-cli")
             .args(&[
                 "daemon",
@@ -42,7 +42,7 @@ impl DaemonManager {
             .stderr(Stdio::piped())
             .spawn()?;
 
-        let stderr = command.stderr.take().unwrap();
+        let stderr = command.stderr.take().ok_or("Failed to redirect stderr")?;
         let reader = BufReader::new(stderr);
 
         tokio::select! {
@@ -52,7 +52,11 @@ impl DaemonManager {
                 panic!("Could not start signal-cli in time!");
             },
             value = read_until_listening(reader) => {
-                value.unwrap();
+                if value.is_err() {
+                    command.kill().await?;
+                    panic!("Could not read from signal-cli!");
+                }
+
                 trace!("signal-cli started and is ready");
             }
         }
@@ -103,11 +107,11 @@ async fn read_until_listening(mut stdout: BufReader<ChildStderr>) -> Result<(), 
 
         if !response.is_empty() {
             trace!("Signal: {}", &response.trim_end());
-        }
 
-        if response.contains("Listening on socket") {
-            debug!("signal-cli is listening");
-            break;
+            if response.contains("Listening on socket") {
+                debug!("signal-cli is listening");
+                break;
+            }
         }
     }
 

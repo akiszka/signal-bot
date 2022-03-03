@@ -118,18 +118,15 @@ impl Connection {
         let sender_responses = responses.clone();
         tokio::spawn(async move {
             while let Some((mut cmd, response)) = request_rx.recv().await {
-                // FIXME: handle errors
-                let id = Uuid::new_v4().as_hyphenated().to_string();
+                let id = send_command_to_socket(&mut write_socket, &mut cmd).await;
 
-                let command = serde_json::to_string(cmd.with_id(id.clone())).unwrap();
-                let command = command.as_str();
-
-                write_socket.write_all(command.as_bytes()).await.unwrap();
-                write_socket.write_all(b"\n").await.unwrap();
-                write_socket.flush().await.unwrap();
-
-                let mut responses = sender_responses.lock().unwrap();
-                responses.insert(id, response);
+                if let Ok(id) = id {
+                    if let Ok(mut responses) = sender_responses.lock() {
+                        responses.insert(id, response);
+                    }
+                } else {
+                    error!("Error sending command to Signal");
+                }
             }
         });
 
@@ -144,13 +141,18 @@ impl Connection {
                     continue;
                 }
 
-                let mut responses = reader_responses.lock().unwrap();
-                let response: Option<RPCResponse> = serde_json::from_str(&response_raw).ok();
-
-                if let Some(response) = response {
-                    if let Some(response_channel) = responses.remove(&response.id) {
-                        response_channel.send(response).unwrap();
+                if let Ok(mut responses) = reader_responses.lock() {
+                    // If the response is not valid JSON, we ignore it
+                    if let Ok(response) = serde_json::from_str::<RPCResponse>(&response_raw) {
+                        // If there is no channel for this response, we ignore it
+                        if let Some(response_channel) = responses.remove(&response.id) {
+                            response_channel.send(response).unwrap_or_else(|_| {
+                                error!("Error sending response to channel");
+                            });
+                        }
                     }
+                } else {
+                    error!("Error locking responses! This might be a bug!");
                 }
 
                 response_raw.clear();
@@ -168,4 +170,20 @@ impl Connection {
 
         Ok(response)
     }
+}
+
+async fn send_command_to_socket(
+    socket: &mut tokio::net::unix::OwnedWriteHalf,
+    command: &mut RPCCommand,
+) -> Result<String, Box<dyn Error>> {
+    let id = Uuid::new_v4().as_hyphenated().to_string();
+
+    let command = serde_json::to_string(&command.with_id(id.clone()))?;
+    let command = command.as_str();
+
+    socket.write_all(command.as_bytes()).await?;
+    socket.write_all(b"\n").await?;
+    socket.flush().await?;
+
+    Ok(id)
 }
