@@ -6,10 +6,9 @@ use tokio::{
     process::Command,
 };
 
-use crate::signal_daemon::DaemonManager;
+use super::Signal;
 
-// FIXME: Linking requires restarting the JSON RPC deamon
-pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error>> {
+pub(super) async fn link(signal: &Signal) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])
         .kill_on_drop(false)
@@ -18,26 +17,30 @@ pub async fn link(daemon_manager: DaemonManager) -> Result<String, Box<dyn Error
         .stderr(Stdio::inherit())
         .spawn()?;
 
-    let stdout = output.stdout.take().unwrap();
+    let stdout = output.stdout.take().ok_or("Failed to redirect stdout")?;
     let mut reader = BufReader::new(stdout);
     let mut response = String::new();
     reader.read_line(&mut response).await?;
 
-    debug!("got join link from signal-cli: {}", &response);
+    debug!("[LINK] got join link from signal-cli: {}", &response);
 
     // This will either let Signal finish or kill it after 4 minutes
-    #[allow(unused_must_use)]
+    let signal_to_restart = signal.clone();
     tokio::spawn(async move {
         tokio::select! {
             _ = output.wait() => {
-                // Linking was successful. TODO: restart the Signal daemon.
                 debug!("[LINK] Link successful. Restarting...");
-                daemon_manager.restart().await;
+                signal_to_restart.restart().await.unwrap_or_else(|e| {
+                    panic!("[LINK] Failed to restart signal: {}", e);
+                });
                 debug!("[LINK] Restarted!");
             },
             _ = tokio::time::sleep(Duration::from_secs(60*4)).fuse() => {
-                error!("signal-link timeout");
-                output.kill().await;
+                error!("[LINK] signal-link timeout");
+
+                output.kill().await.unwrap_or_else(|e| {
+                    error!("[LINK] Failed to kill signal-link: {}", e);
+                });
             }
         }
     });

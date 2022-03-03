@@ -97,6 +97,7 @@ dependencies = [
  "serde",
  "simple_logger",
  "tokio",
+ "uuid 1.0.0-alpha.1",
 ]
 
 [[package]]
@@ -929,7 +930,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "ubyte",
- "uuid",
+ "uuid 0.8.2",
  "version_check",
  "yansi",
 ]
@@ -976,7 +977,7 @@ dependencies = [
  "time 0.2.27",
  "tokio",
  "uncased",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1468,6 +1469,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "uuid"
+version = "1.0.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb3ab47baa004111b323696c6eaa2752e7356f7f77cf6b6dc7a2087368ce1ca4"
+dependencies = [
+ "getrandom",
+ "rand",
+ "uuid-macro-internal",
+]
+
+[[package]]
+name = "uuid-macro-internal"
+version = "1.0.0-alpha.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8840edd0c528bd9c74bb58a2ed578009a2200f7036bd7206c76873b4e8b7a881"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

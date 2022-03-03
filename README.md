@@ -52,3 +52,4 @@ docker load -i result
 - [ ] add tests
 - [ ] add access control (possibly with JWT)
 - [x] add webhook support for GitHub
+- [ ] add docs
