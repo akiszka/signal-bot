@@ -11,7 +11,7 @@ use tokio::{
 };
 
 #[derive(Clone)]
-pub struct DaemonManager {
+pub(super) struct DaemonManager {
     daemon: Arc<Mutex<Child>>,
 }
 

@@ -48,7 +48,7 @@ pub struct RPCResultInternal {
 }
 
 impl RPCCommand {
-    pub fn new(method: String, params: RPCParams) -> Self {
+    pub(super) fn new(method: String, params: RPCParams) -> Self {
         RPCCommand {
             jsonrpc: "2.0".to_string(),
             id: "my special mark".to_string(),
@@ -57,7 +57,7 @@ impl RPCCommand {
         }
     }
 
-    pub fn with_id(&mut self, id: String) -> &mut Self {
+    pub(super) fn with_id(&mut self, id: String) -> &mut Self {
         self.id = id;
         self
     }
@@ -88,7 +88,7 @@ impl RPCCommand {
 }
 
 #[derive(Clone)]
-pub struct Connection {
+pub(super) struct Connection {
     request_tx: mpsc::Sender<(RPCCommand, oneshot::Sender<RPCResponse>)>,
 }
 

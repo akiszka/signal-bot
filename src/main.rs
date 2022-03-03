@@ -89,9 +89,7 @@ async fn notify(message: Form<Message<'_>>, signal: &State<Signal>) -> Result<St
 
 #[get("/link")]
 async fn link(signal: &State<Signal>) -> Result<String, Status> {
-    let daemon = (*signal.inner()).clone();
-
-    signal::link::link(daemon).await.map_err(|err| {
+    signal.link().await.map_err(|err| {
         error!("{:?}", err);
         Status::InternalServerError
     })

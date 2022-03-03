@@ -8,7 +8,7 @@ use tokio::{
 
 use super::Signal;
 
-pub async fn link(signal: Signal) -> Result<String, Box<dyn Error>> {
+pub(super) async fn link(signal: &Signal) -> Result<String, Box<dyn Error>> {
     let mut output = Command::new("signal-cli")
         .args(&["link", "-n", "akiszka/signalbot"])
         .kill_on_drop(false)
@@ -25,11 +25,12 @@ pub async fn link(signal: Signal) -> Result<String, Box<dyn Error>> {
     debug!("[LINK] got join link from signal-cli: {}", &response);
 
     // This will either let Signal finish or kill it after 4 minutes
+    let signal_to_restart = signal.clone();
     tokio::spawn(async move {
         tokio::select! {
             _ = output.wait() => {
                 debug!("[LINK] Link successful. Restarting...");
-                signal.restart().await.unwrap_or_else(|e| {
+                signal_to_restart.restart().await.unwrap_or_else(|e| {
                     panic!("[LINK] Failed to restart signal: {}", e);
                 });
                 debug!("[LINK] Restarted!");

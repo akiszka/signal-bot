@@ -36,4 +36,8 @@ impl Signal {
         let response = self.connection.send_command(command).await?;
         Ok(serde_json::to_string(&response)?)
     }
+
+    pub async fn link(&self) -> Result<String, Box<dyn Error>> {
+        link::link(self).await
+    }
 }
