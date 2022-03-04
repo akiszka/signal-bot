@@ -96,8 +96,8 @@ impl DaemonManager {
     }
 }
 
-// This is a helper function that reads from the stdout of signal-cli until it starts listening on the socket.
-// This allows us to wait until the daemon is ready to accept connections.
+/// This is a helper function that reads from the stdout of signal-cli until it starts listening on the socket.
+/// This allows us to wait until the daemon is ready to accept connections.
 async fn read_until_listening(mut stdout: BufReader<ChildStderr>) -> Result<(), std::io::Error> {
     let mut response = String::new();
 

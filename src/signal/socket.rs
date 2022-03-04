@@ -33,18 +33,8 @@ pub struct RPCParams {
 pub struct RPCResponse {
     jsonrpc: String,
     pub id: String,
-    result: RPCResult,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct RPCResult {
-    pub timestamp: u64,
-    pub results: Vec<RPCResultInternal>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct RPCResultInternal {
-    pub r#type: String,
+    result: Option<serde_json::Value>,
+    error: Option<serde_json::Value>,
 }
 
 impl RPCCommand {
@@ -141,6 +131,8 @@ impl Connection {
                     continue;
                 }
 
+                debug!("Signal Daemon: {}", response_raw);
+
                 if let Ok(mut responses) = reader_responses.lock() {
                     // If the response is not valid JSON, we ignore it
                     if let Ok(response) = serde_json::from_str::<RPCResponse>(&response_raw) {
@@ -180,6 +172,8 @@ async fn send_command_to_socket(
 
     let command = serde_json::to_string(&command.with_id(id.clone()))?;
     let command = command.as_str();
+
+    debug!("Sending command to Signal: {}", command);
 
     socket.write_all(command.as_bytes()).await?;
     socket.write_all(b"\n").await?;
