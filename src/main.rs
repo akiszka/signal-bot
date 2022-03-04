@@ -1,6 +1,6 @@
 #![feature(bool_to_option)]
-#![feature(never_type)]
-#![feature(box_into_inner)]
+#![feature(async_closure)]
+mod jwt;
 mod signal;
 mod webhooks;
 
